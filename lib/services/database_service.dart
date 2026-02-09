@@ -1,5 +1,4 @@
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 
 /// DatabaseService - Handles local SQLite database operations
 /// 
@@ -23,7 +22,7 @@ class DatabaseService {
   /// Initialize the database
   static Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, _dbName);
+    final path = '$dbPath/$_dbName';
 
     return await openDatabase(
       path,
