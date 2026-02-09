@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import 'web_database_mock.dart';
 
 /// DatabaseService - Handles local SQLite database operations
 /// 
@@ -15,7 +17,14 @@ class DatabaseService {
   /// Get the database instance (initializes if needed)
   static Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
+    
+    if (kIsWeb) {
+      _database = WebDatabaseMock();
+      // Mock categories initialization on web
+      await _insertDefaultCategories(_database!);
+    } else {
+      _database = await _initDatabase();
+    }
     return _database!;
   }
 
