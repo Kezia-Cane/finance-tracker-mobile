@@ -1,0 +1,238 @@
+# Finance Tracker App - Anti-Gravity Master Plan
+
+## Project Overview
+**Name:** Finance Tracker App  
+**Type:** Cross-platform mobile app (Flutter) + Admin Dashboard (Laravel + React)  
+**Purpose:** Portfolio project demonstrating full-stack development, offline-first mobile functionality, cloud sync, and admin dashboard with analytics.
+
+**Goals:**
+- Minimalist, fully functional finance tracker  
+- Offline-first with optional cloud sync  
+- Encrypted local storage  
+- Admin dashboard for internal portfolio demo  
+- Supabase Auth for login  
+
+---
+
+## Technology Stack
+- **Mobile App:** Flutter 3.13+, Dart 3.x  
+- **Backend API:** Laravel 10.x, PHP 8.2  
+- **Admin Frontend:** React 18 + Tailwind CSS  
+- **Database:** Supabase Postgres (encrypted fields)  
+- **Auth:** Supabase Auth  
+- **Local Storage:** SQLite (encrypted)  
+
+---
+
+## Required Packages / Libraries
+
+**Flutter:**  
+- sqflite  
+- hive  
+- flutter_secure_storage  
+- charts_flutter  
+
+**Laravel:**  
+- sanctum  
+- spatie/laravel-permission  
+- laravel-cors  
+
+**React:**  
+- axios  
+- react-router-dom  
+- tailwindcss  
+
+---
+
+## Project Structure
+
+### Flutter App
+
+/lib
+/models # Data models
+/services # API, local storage, sync logic
+/screens # UI screens
+/widgets # Reusable UI components
+/utils # Helper functions, constants
+main.dart
+
+
+
+### Laravel API
+
+/app
+/Http/Controllers
+/Models
+/routes
+api.php
+
+
+### React Admin Dashboard
+
+/src
+/components # Reusable UI components
+/pages # Admin pages
+/services # API calls
+/utils # Helper functions
+index.js
+
+
+---
+
+## Core Features
+
+### Mobile App (MVP)
+- Add, edit, delete income & expense transactions  
+- Categorize transactions  
+- Offline-first with SQLite, encrypted storage  
+- Optional cloud sync with Supabase Postgres  
+- Charts: monthly, weekly, by category  
+- Supabase Auth login/signup  
+
+### Admin Dashboard (MVP)
+- Manage categories/templates  
+- View anonymized usage analytics  
+- Feature flags management  
+- Internal portfolio demo only  
+
+---
+
+## Nice-to-have Features
+- Quick-add transaction presets  
+- Export PDF/CSV reports  
+- Custom app themes  
+- Push notifications/reminders  
+- Real-time charts on admin dashboard  
+
+---
+
+## Architecture Overview
+
+[Mobile App - Flutter]
+|
+[Local SQLite - encrypted]
+|
+v
+[Supabase Cloud (Postgres)]
+|
+v
+[Backend API - Laravel]
+|
+v
+[Admin Dashboard - React]
+
+
+**Notes:**  
+- Users can operate fully offline  
+- Transactions stored locally → synced on login/cloud  
+- Admin sees only aggregated/anonymized data  
+
+---
+
+## Implementation Phases
+
+**Phase 1: Mobile App MVP**  
+- Initialize Flutter project  
+- Setup models + encrypted SQLite  
+- CRUD transactions  
+- Supabase Auth integration  
+
+**Phase 2: Cloud Sync**  
+- Sync SQLite → Supabase  
+- Implement conflict resolution  
+
+**Phase 3: Admin Dashboard**  
+- Laravel API endpoints for categories/templates/analytics  
+- React frontend + Tailwind CSS  
+
+**Phase 4: Portfolio Polishing**  
+- Clean UX/UI  
+- README & documentation  
+- Demo data setup  
+
+---
+
+## Detailed Feature Implementation
+
+**Transactions:**  
+- CRUD operations (add/edit/delete)  
+- Categorization  
+- Offline-first, encrypted storage  
+- Optional cloud sync  
+
+**Charts/Summaries:**  
+- Monthly/weekly totals  
+- Category breakdowns  
+
+**Auth:**  
+- Supabase Auth login/signup  
+- Optional social login  
+
+**Admin Dashboard:**  
+- CRUD categories/templates  
+- Anonymized analytics  
+- Feature flags  
+
+---
+
+## Code Standards
+- camelCase for Dart/JS variables  
+- PascalCase for class names  
+- Comment all methods/functions  
+- Keep services separate from UI  
+- Follow Flutter + React best practices  
+
+---
+
+## Step-by-Step Implementation
+
+1. **Flutter App Setup**  
+   - Initialize project + packages  
+   - Setup models + encrypted SQLite storage  
+   - Implement Supabase Auth  
+
+2. **CRUD Transactions**  
+   - Add/edit/delete transactions  
+   - Categorization  
+   - Offline storage  
+
+3. **Charts & Summaries**  
+   - Monthly/weekly totals  
+   - Category breakdown  
+
+4. **Cloud Sync**  
+   - Detect login  
+   - Sync local → Supabase  
+   - Conflict resolution  
+
+5. **Admin Dashboard (Laravel + React)**  
+   - Laravel API endpoints: categories/templates/analytics  
+   - React pages for dashboard + Tailwind  
+   - Connect to Supabase Postgres  
+   - Display anonymized analytics  
+
+---
+
+## Testing Requirements
+- CRUD transactions + edge cases  
+- Offline → online sync  
+- Auth flow (signup/login/logout)  
+- Admin dashboard data correctness  
+
+---
+
+## Success Criteria
+- Mobile app fully functional offline + online  
+- Cloud sync works correctly  
+- Admin dashboard displays aggregated analytics only  
+- Clean code structure + fully documented  
+- Ready for portfolio demonstration  
+
+---
+
+## Anti-Gravity Usage Notes
+- Use as **master project plan** for AI-guided coding  
+- Reference for step-by-step module generation  
+- Maintain separation: mobile / backend / admin dashboard  
+- Include comments and documentation in all generated code  
+- Follow project structure strictly
