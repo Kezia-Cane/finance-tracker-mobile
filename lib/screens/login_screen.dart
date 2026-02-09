@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 import '../widgets/glass_components.dart';
+import '../services/auth_service.dart';
 import 'signup_screen.dart';
 
 /// LoginScreen - Premium authentication interface
@@ -64,14 +65,36 @@ class _LoginScreenState extends State<LoginScreen>
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
-      // TODO: Implement Supabase Auth login logic
-      await Future.delayed(const Duration(seconds: 2)); // Simulated delay
-      
-      setState(() => _isLoading = false);
-      
-      // Navigate to dashboard on success
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/dashboard');
+      try {
+        await AuthService.signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+        
+        // Navigate to dashboard on success
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                e.toString().replaceAll('Exception: ', ''),
+                style: const TextStyle(fontFamily: 'IBMPlexSans'),
+              ),
+              backgroundColor: AppTheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }

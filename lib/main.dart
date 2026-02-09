@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'utils/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/auth_service.dart';
 
 /// Finance Tracker App
 /// 
@@ -10,10 +12,9 @@ import 'screens/dashboard_screen.dart';
 /// - Glassmorphism UI design
 /// - IBM Plex Sans typography
 /// - Dark mode with cyan accents
-/// - Material 3 components
-/// 
-/// Based on UI/UX Pro Max fintech design recommendations.
-void main() {
+/// - Supabase authentication
+/// - Local SQLite storage
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Set system UI overlay style for immersive dark mode
@@ -24,6 +25,13 @@ void main() {
       systemNavigationBarColor: AppTheme.surfaceDark,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
+  );
+
+  // Initialize Supabase
+  // TODO: Replace with your actual Supabase URL and Anon Key
+  await Supabase.initialize(
+    url: 'YOUR_SUPABASE_URL',
+    anonKey: 'YOUR_SUPABASE_ANON_KEY',
   );
   
   runApp(const FinanceTrackerApp());
@@ -42,8 +50,10 @@ class FinanceTrackerApp extends StatelessWidget {
       // Apply the premium dark theme
       theme: AppTheme.darkTheme,
       
-      // Set the initial screen
-      home: const LoginScreen(),
+      // Use auth state to determine initial route
+      home: AuthService.isAuthenticated
+          ? const DashboardScreen()
+          : const LoginScreen(),
       
       // Define named routes for navigation
       routes: {
