@@ -1,7 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../utils/app_theme.dart';
 import '../widgets/glass_components.dart';
+import '../providers/transaction_provider.dart';
+import '../models/transaction_model.dart';
 import 'transaction_list_screen.dart';
 import 'transaction_form_screen.dart';
 
@@ -10,10 +14,10 @@ import 'transaction_form_screen.dart';
 /// Premium fintech dashboard featuring:
 /// - Glassmorphism balance card with gradient
 /// - Income/Expense stat cards with glow effects
-/// - Recent transactions list
+/// - Recent transactions list from local SQLite
 /// - Floating action button for quick add
 /// 
-/// Based on UI/UX Pro Max design system recommendations.
+/// Connected to TransactionProvider for local-first data.
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -25,41 +29,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  
-  // Sample data - will be replaced with actual data from services
-  final double _totalBalance = 12450.50;
-  final double _totalIncome = 8500.00;
-  final double _totalExpense = 3200.00;
-  final List<Map<String, dynamic>> _recentTransactions = [
-    {
-      'title': 'Grocery Shopping',
-      'category': 'Food',
-      'amount': -125.50,
-      'date': 'Today',
-      'icon': Icons.shopping_cart,
-    },
-    {
-      'title': 'Salary',
-      'category': 'Income',
-      'amount': 5000.00,
-      'date': 'Yesterday',
-      'icon': Icons.work,
-    },
-    {
-      'title': 'Netflix Subscription',
-      'category': 'Entertainment',
-      'amount': -15.99,
-      'date': '2 days ago',
-      'icon': Icons.movie,
-    },
-    {
-      'title': 'Freelance Project',
-      'category': 'Income',
-      'amount': 850.00,
-      'date': '3 days ago',
-      'icon': Icons.computer,
-    },
-  ];
 
   @override
   void initState() {
@@ -72,12 +41,59 @@ class _DashboardScreenState extends State<DashboardScreen>
       CurvedAnimation(parent: _fadeController, curve: Curves.easeOut),
     );
     _fadeController.forward();
+
+    // Load transactions on screen init
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TransactionProvider>().loadTransactions();
+    });
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
     super.dispose();
+  }
+
+  /// Format currency value
+  String _formatCurrency(double value) {
+    return NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(value);
+  }
+
+  /// Get relative date string
+  String _getRelativeDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final transactionDate = DateTime(date.year, date.month, date.day);
+    final difference = today.difference(transactionDate).inDays;
+
+    if (difference == 0) return 'Today';
+    if (difference == 1) return 'Yesterday';
+    if (difference < 7) return '$difference days ago';
+    return DateFormat('MMM d').format(date);
+  }
+
+  /// Get icon for category
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'food':
+        return Icons.restaurant;
+      case 'transport':
+        return Icons.directions_car;
+      case 'shopping':
+        return Icons.shopping_bag;
+      case 'entertainment':
+        return Icons.movie;
+      case 'utilities':
+        return Icons.flash_on;
+      case 'health':
+        return Icons.medical_services;
+      case 'income':
+        return Icons.work;
+      case 'investment':
+        return Icons.trending_up;
+      default:
+        return Icons.category;
+    }
   }
 
   @override
@@ -94,48 +110,118 @@ class _DashboardScreenState extends State<DashboardScreen>
           SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: CustomScrollView(
-                slivers: [
-                  _buildAppBar(),
-                  SliverPadding(
-                    padding: const EdgeInsets.all(20),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        _buildBalanceCard(),
-                        const SizedBox(height: 24),
-                        _buildSummaryRow(),
-                        const SizedBox(height: 32),
-                        _buildSectionHeader(
-                          'Recent Transactions',
-                          onSeeAll: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const TransactionListScreen(),
+              child: Consumer<TransactionProvider>(
+                builder: (context, provider, child) {
+                  if (provider.isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.accentPrimary,
+                      ),
+                    );
+                  }
+
+                  return CustomScrollView(
+                    slivers: [
+                      _buildAppBar(),
+                      SliverPadding(
+                        padding: const EdgeInsets.all(20),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            _buildBalanceCard(provider),
+                            const SizedBox(height: 24),
+                            _buildSummaryRow(provider),
+                            const SizedBox(height: 32),
+                            _buildSectionHeader(
+                              'Recent Transactions',
+                              onSeeAll: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const TransactionListScreen(),
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 16),
+                            if (provider.recentTransactions.isEmpty)
+                              _buildEmptyState()
+                            else
+                              ...provider.recentTransactions.map((tx) => 
+                                _buildTransactionTile(tx)),
+                            const SizedBox(height: 80), // Space for FAB
+                          ]),
                         ),
-                        const SizedBox(height: 16),
-                        ..._recentTransactions.map((tx) => TransactionTile(
-                          title: tx['title'],
-                          category: tx['category'],
-                          date: tx['date'],
-                          amount: tx['amount'],
-                          icon: tx['icon'],
-                          onTap: () {
-                            // TODO: Navigate to transaction detail
-                          },
-                        )),
-                        const SizedBox(height: 80), // Space for FAB
-                      ]),
-                    ),
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
         ],
       ),
       floatingActionButton: _buildFAB(),
+    );
+  }
+
+  /// Empty state when no transactions
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.glassBg,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.glassBorder),
+            ),
+            child: Icon(
+              Icons.receipt_long_outlined,
+              size: 48,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'No transactions yet',
+            style: TextStyle(
+              fontFamily: 'IBMPlexSans',
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap the button below to add your first transaction',
+            style: TextStyle(
+              fontFamily: 'IBMPlexSans',
+              fontSize: 14,
+              color: AppTheme.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build transaction tile from model
+  Widget _buildTransactionTile(TransactionModel tx) {
+    return TransactionTile(
+      title: tx.title,
+      category: tx.category,
+      date: _getRelativeDate(tx.date),
+      amount: tx.displayAmount,
+      icon: _getCategoryIcon(tx.category),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TransactionFormScreen(transaction: tx),
+          ),
+        );
+      },
     );
   }
 
@@ -229,7 +315,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     ),
                     const Text(
-                      'John Doe',
+                      'Local User',
                       style: TextStyle(
                         fontFamily: 'IBMPlexSans',
                         fontSize: 20,
@@ -240,10 +326,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ],
                 ),
               ),
-              // Notification button
+              // Settings button
               GestureDetector(
                 onTap: () {
-                  // TODO: Implement notifications
+                  // TODO: Navigate to settings
                 },
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -252,40 +338,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AppTheme.glassBorder),
                   ),
-                  child: Badge(
-                    smallSize: 8,
-                    backgroundColor: AppTheme.accentPrimary,
-                    child: const Icon(
-                      Icons.notifications_outlined,
-                      color: AppTheme.textPrimary,
-                      size: 22,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Profile avatar
-              GestureDetector(
-                onTap: () {
-                  // TODO: Navigate to profile/settings
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppTheme.accentGradient,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceMedium,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: AppTheme.textPrimary,
-                      size: 20,
-                    ),
+                  child: const Icon(
+                    Icons.settings_outlined,
+                    color: AppTheme.textPrimary,
+                    size: 22,
                   ),
                 ),
               ),
@@ -297,7 +353,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   /// Premium balance card with glassmorphism
-  Widget _buildBalanceCard() {
+  Widget _buildBalanceCard(TransactionProvider provider) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
@@ -338,35 +394,35 @@ class _DashboardScreenState extends State<DashboardScreen>
                       color: AppTheme.textSecondary,
                     ),
                   ),
-                  // Sync status badge
+                  // Local mode badge
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.success.withOpacity(0.15),
+                      color: AppTheme.info.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: AppTheme.success.withOpacity(0.3),
+                        color: AppTheme.info.withOpacity(0.3),
                       ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.cloud_done_outlined,
+                          Icons.phone_android,
                           size: 14,
-                          color: AppTheme.success,
+                          color: AppTheme.info,
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Synced',
+                          'Local',
                           style: TextStyle(
                             fontFamily: 'IBMPlexSans',
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: AppTheme.success,
+                            color: AppTheme.info,
                           ),
                         ),
                       ],
@@ -376,47 +432,44 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
               const SizedBox(height: 12),
               // Balance amount
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '\$',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSans',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.accentPrimary,
-                    ),
-                  ),
-                  Text(
-                    _totalBalance.toStringAsFixed(2).split('.')[0],
-                    style: const TextStyle(
-                      fontFamily: 'IBMPlexSans',
-                      fontSize: 42,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                      height: 1,
-                    ),
-                  ),
-                  Text(
-                    '.${_totalBalance.toStringAsFixed(2).split('.')[1]}',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSans',
-                      fontSize: 24,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
+              Text(
+                _formatCurrency(provider.totalBalance),
+                style: const TextStyle(
+                  fontFamily: 'IBMPlexSans',
+                  fontSize: 42,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                  height: 1,
+                ),
               ),
               const SizedBox(height: 24),
-              // Mini stats row
-              Row(
-                children: [
-                  Expanded(child: _buildMiniStat('This Month', '+\$2,340.00', true)),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildMiniStat('Last Month', '+\$1,890.00', false)),
-                ],
+              // Transaction count
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.glassBorder),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      size: 18,
+                      color: AppTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${provider.transactions.length} transactions',
+                      style: const TextStyle(
+                        fontFamily: 'IBMPlexSans',
+                        fontSize: 14,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -425,55 +478,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  /// Mini stat widget inside balance card
-  Widget _buildMiniStat(String label, String value, bool isHighlighted) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isHighlighted
-            ? AppTheme.success.withOpacity(0.1)
-            : Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isHighlighted
-              ? AppTheme.success.withOpacity(0.2)
-              : AppTheme.glassBorder,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'IBMPlexSans',
-              fontSize: 12,
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'IBMPlexSans',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: isHighlighted ? AppTheme.success : AppTheme.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Income/Expense summary row
-  Widget _buildSummaryRow() {
+  Widget _buildSummaryRow(TransactionProvider provider) {
     return Row(
       children: [
         Expanded(
           child: StatCard(
             title: 'Income',
-            value: '\$${_totalIncome.toStringAsFixed(2)}',
+            value: _formatCurrency(provider.totalIncome),
             icon: Icons.arrow_downward_rounded,
             color: AppTheme.success,
           ),
@@ -482,7 +494,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         Expanded(
           child: StatCard(
             title: 'Expense',
-            value: '\$${_totalExpense.toStringAsFixed(2)}',
+            value: _formatCurrency(provider.totalExpense),
             icon: Icons.arrow_upward_rounded,
             color: AppTheme.error,
           ),
@@ -509,8 +521,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           TextButton(
             onPressed: onSeeAll,
             child: Row(
-              children: [
-                const Text(
+              children: const [
+                Text(
                   'See All',
                   style: TextStyle(
                     fontFamily: 'IBMPlexSans',
@@ -519,8 +531,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                     color: AppTheme.accentPrimary,
                   ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(
+                SizedBox(width: 4),
+                Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 14,
                   color: AppTheme.accentPrimary,
@@ -540,13 +552,17 @@ class _DashboardScreenState extends State<DashboardScreen>
         boxShadow: AppTheme.accentGlow,
       ),
       child: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => const TransactionFormScreen(),
             ),
           );
+          // Refresh if a transaction was added
+          if (result == true && mounted) {
+            context.read<TransactionProvider>().loadTransactions();
+          }
         },
         backgroundColor: AppTheme.accentPrimary,
         foregroundColor: AppTheme.primaryDark,

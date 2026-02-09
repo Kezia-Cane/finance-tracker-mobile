@@ -1,7 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../utils/app_theme.dart';
 import '../widgets/glass_components.dart';
+import '../providers/transaction_provider.dart';
+import '../models/transaction_model.dart';
 
 /// TransactionFormScreen - Add/Edit transaction interface
 /// 
@@ -11,9 +15,11 @@ import '../widgets/glass_components.dart';
 /// - Category selection grid
 /// - Date picker
 /// - Notes field
+/// 
+/// Connected to TransactionProvider for local SQLite storage.
 class TransactionFormScreen extends StatefulWidget {
   /// The transaction to edit (null for new transaction)
-  final Map<String, dynamic>? transaction;
+  final TransactionModel? transaction;
 
   const TransactionFormScreen({super.key, this.transaction});
 
@@ -49,6 +55,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
     {'name': 'Other', 'icon': Icons.category},
   ];
 
+  bool get _isEditing => widget.transaction != null;
+
   @override
   void initState() {
     super.initState();
@@ -62,11 +70,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
     _animationController.forward();
 
     // Pre-fill if editing
-    if (widget.transaction != null) {
-      _titleController.text = widget.transaction!['title'] ?? '';
-      _amountController.text = widget.transaction!['amount'].abs().toString();
-      _isExpense = widget.transaction!['amount'] < 0;
-      _selectedCategory = widget.transaction!['category'] ?? 'Other';
+    if (_isEditing) {
+      final tx = widget.transaction!;
+      _titleController.text = tx.title;
+      _amountController.text = tx.amount.toStringAsFixed(2);
+      _isExpense = tx.isExpense;
+      _selectedCategory = tx.category;
+      _selectedDate = tx.date;
+      _notesController.text = tx.notes ?? '';
     }
   }
 
@@ -84,28 +95,152 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
-      // TODO: Implement save logic with local SQLite
-      await Future.delayed(const Duration(seconds: 1));
-      
-      setState(() => _isLoading = false);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.transaction != null
-                  ? 'Transaction updated!'
-                  : 'Transaction added!',
-              style: const TextStyle(fontFamily: 'IBMPlexSans'),
+      try {
+        final provider = context.read<TransactionProvider>();
+        final amount = double.parse(_amountController.text);
+
+        if (_isEditing) {
+          // Update existing transaction
+          final updated = widget.transaction!.copyWith(
+            title: _titleController.text.trim(),
+            amount: amount,
+            category: _selectedCategory,
+            notes: _notesController.text.trim().isEmpty 
+                ? null 
+                : _notesController.text.trim(),
+            date: _selectedDate,
+            isExpense: _isExpense,
+          );
+          await provider.updateTransaction(updated);
+        } else {
+          // Create new transaction
+          await provider.addTransaction(
+            title: _titleController.text.trim(),
+            amount: amount,
+            category: _selectedCategory,
+            notes: _notesController.text.trim().isEmpty 
+                ? null 
+                : _notesController.text.trim(),
+            date: _selectedDate,
+            isExpense: _isExpense,
+          );
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _isEditing ? 'Transaction updated!' : 'Transaction added!',
+                style: const TextStyle(fontFamily: 'IBMPlexSans'),
+              ),
+              backgroundColor: AppTheme.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            backgroundColor: AppTheme.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+          );
+          Navigator.pop(context, true); // Return true to signal refresh
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to save: ${e.toString()}',
+                style: const TextStyle(fontFamily: 'IBMPlexSans'),
+              ),
+              backgroundColor: AppTheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
+  /// Handle delete
+  Future<void> _handleDelete() async {
+    if (!_isEditing) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surfaceMedium,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete Transaction?',
+          style: TextStyle(
+            fontFamily: 'IBMPlexSans',
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        content: const Text(
+          'This action cannot be undone.',
+          style: TextStyle(
+            fontFamily: 'IBMPlexSans',
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSans',
+                color: AppTheme.textSecondary,
+              ),
             ),
           ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSans',
+                color: AppTheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      setState(() => _isLoading = true);
+      try {
+        await context.read<TransactionProvider>().deleteTransaction(
+          widget.transaction!.id,
         );
-        Navigator.pop(context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Transaction deleted',
+                style: TextStyle(fontFamily: 'IBMPlexSans'),
+              ),
+              backgroundColor: AppTheme.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -168,6 +303,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
                             _buildNotesInput(),
                             const SizedBox(height: 32),
                             _buildSubmitButton(),
+                            if (_isEditing) ...[
+                              const SizedBox(height: 16),
+                              _buildDeleteButton(),
+                            ],
                             const SizedBox(height: 20),
                           ],
                         ),
@@ -234,7 +373,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
           const SizedBox(width: 16),
           Expanded(
             child: Text(
-              widget.transaction != null ? 'Edit Transaction' : 'Add Transaction',
+              _isEditing ? 'Edit Transaction' : 'Add Transaction',
               style: const TextStyle(
                 fontFamily: 'IBMPlexSans',
                 fontSize: 20,
@@ -350,7 +489,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
                   controller: _amountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'IBMPlexSans',
                     fontSize: 48,
                     fontWeight: FontWeight.w700,
@@ -373,6 +512,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
                     }
                     if (double.tryParse(value) == null) {
                       return 'Invalid amount';
+                    }
+                    if (double.parse(value) <= 0) {
+                      return 'Must be > 0';
                     }
                     return null;
                   },
@@ -510,7 +652,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                    DateFormat('MMMM d, yyyy').format(_selectedDate),
                     style: const TextStyle(
                       fontFamily: 'IBMPlexSans',
                       fontSize: 16,
@@ -545,11 +687,47 @@ class _TransactionFormScreenState extends State<TransactionFormScreen>
   /// Submit button
   Widget _buildSubmitButton() {
     return GlassButton(
-      text: widget.transaction != null ? 'Update Transaction' : 'Save Transaction',
+      text: _isEditing ? 'Update Transaction' : 'Save Transaction',
       onPressed: _handleSubmit,
       isLoading: _isLoading,
       icon: Icons.check_rounded,
       width: double.infinity,
+    );
+  }
+
+  /// Delete button (only for editing)
+  Widget _buildDeleteButton() {
+    return GestureDetector(
+      onTap: _handleDelete,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: AppTheme.error.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.error.withOpacity(0.3)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.delete_outline_rounded,
+              color: AppTheme.error,
+              size: 20,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Delete Transaction',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSans',
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.error,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

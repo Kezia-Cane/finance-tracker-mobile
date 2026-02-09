@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 import 'utils/app_theme.dart';
-import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
-import 'services/auth_service.dart';
+import 'providers/transaction_provider.dart';
+import 'services/database_service.dart';
 
 /// Finance Tracker App
 /// 
@@ -12,8 +12,9 @@ import 'services/auth_service.dart';
 /// - Glassmorphism UI design
 /// - IBM Plex Sans typography
 /// - Dark mode with cyan accents
-/// - Supabase authentication
-/// - Local SQLite storage
+/// - Local SQLite storage (offline-first)
+/// 
+/// Cloud sync via Supabase can be enabled later.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -27,12 +28,8 @@ void main() async {
     ),
   );
 
-  // Initialize Supabase
-  // TODO: Replace with your actual Supabase URL and Anon Key
-  await Supabase.initialize(
-    url: 'YOUR_SUPABASE_URL',
-    anonKey: 'YOUR_SUPABASE_ANON_KEY',
-  );
+  // Initialize local database
+  await DatabaseService.database;
   
   runApp(const FinanceTrackerApp());
 }
@@ -43,30 +40,20 @@ class FinanceTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Finance Tracker',
-      debugShowCheckedModeBanner: false,
-      
-      // Apply the premium dark theme
-      theme: AppTheme.darkTheme,
-      
-      // Use auth state to determine initial route
-      home: AuthService.isAuthenticated
-          ? const DashboardScreen()
-          : const LoginScreen(),
-      
-      // Define named routes for navigation
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/dashboard': (context) => const DashboardScreen(),
-      },
-      
-      // Handle unknown routes gracefully
-      onUnknownRoute: (settings) {
-        return MaterialPageRoute(
-          builder: (context) => const LoginScreen(),
-        );
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TransactionProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Finance Tracker',
+        debugShowCheckedModeBanner: false,
+        
+        // Apply the premium dark theme
+        theme: AppTheme.darkTheme,
+        
+        // Start directly on Dashboard for local-first mode
+        home: const DashboardScreen(),
+      ),
     );
   }
 }
